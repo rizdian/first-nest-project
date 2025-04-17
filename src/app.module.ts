@@ -1,25 +1,30 @@
-import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { UserModule } from './user/user.module';
+import { MiddlewareConsumer, Module } from '@nestjs/common';
+import * as Joi from '@hapi/joi';
+import { UserModule } from './modules/user/user.module';
+import { AppLogger } from './common/logger/logger.service';
+import { MdcMiddleware } from './common/logger/mdc.middleware';
+import { DatabaseModule } from './database/database.module';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
   imports: [
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: process.env.DATABASE_HOST ?? 'localhost',
-      port: parseInt(process.env.DATABASE_PORT ?? '5432', 10),
-      username: process.env.DATABASE_USER ?? 'postgres',
-      password: process.env.DATABASE_PASSWORD ?? 'postgres',
-      database: process.env.DATABASE_NAME ?? 'example-nest',
-      entities: [__dirname + '/**/*.entity{.ts,.js}'],
-      synchronize: true, // ⚠️ Jangan aktifkan ini di production
-      autoLoadEntities: true,
+    ConfigModule.forRoot({
+      validationSchema: Joi.object({
+        POSTGRES_HOST: Joi.string().required(),
+        POSTGRES_PORT: Joi.number().required(),
+        POSTGRES_USER: Joi.string().required(),
+        POSTGRES_PASSWORD: Joi.string().required(),
+        POSTGRES_DB: Joi.string().required(),
+        PORT: Joi.number(),
+      }),
     }),
-  UserModule,
+    DatabaseModule,
+    UserModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
+  providers: [AppLogger],
 })
-export class AppModule {}
+export class AppModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(MdcMiddleware).forRoutes('*');
+  }
+}
